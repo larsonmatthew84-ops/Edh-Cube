@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cube Codex Professional</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --surface: #161618;
+            --surface-card: #222224;
+            --primary: #007aff;
+            --text-main: #ffffff;
+            --text-dim: #8e8e93;
+            --accent: #2c2c2e;
+            --theme-color: var(--primary);
+            --theme-border-bg: var(--primary);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg); color: var(--text-main); margin: 0; overflow: hidden;
+        }
+
+        .page {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            transition: transform 0.4s cubic-bezier(0.1, 0.8, 0.3, 1);
+            background: var(--bg); display: flex; flex-direction: column;
+        }
+
+        /* --- SEARCH SCREEN & SHORTLIST UI --- */
+        #search-screen { z-index: 10; padding-top: env(safe-area-inset-top); }
+        .header { padding: 20px 20px 10px 20px; background: var(--bg); display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        
+        .btn-clear-all {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 6px;
+            transition: color 0.2s, background-color 0.2s;
+        }
+        .btn-clear-all:active, .btn-clear-all:hover {
+            color: #ff3b30;
+            background: rgba(255, 59, 48, 0.1);
+        }
+        
+        .filter-tabs { display: flex; background: var(--accent); padding: 2px; border-radius: 8px; margin: 0 20px 10px 20px; }
+        .tab-btn { flex: 1; background: none; border: none; color: var(--text-dim); padding: 6px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+        .tab-btn.active { background: #3a3a3c; color: white; }
+
+        .search-container { padding: 0 20px 15px 20px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
+        #search-input {
+            width: 100%; padding: 12px 16px; border-radius: 12px; border: none;
+            background: var(--accent); color: white; font-size: 17px; outline: none;
+        }
+
+        #list-container { flex: 1; overflow-y: auto; padding-bottom: 40px; }
+        .commander-row {
+            padding: 16px 20px; border-bottom: 1px solid #1c1c1e;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .commander-row:active { background: var(--accent); }
+        .row-info { display: flex; align-items: center; }
+        .row-rank { color: var(--text-dim); font-size: 14px; width: 35px; font-family: monospace; }
+        .row-name { font-size: 17px; font-weight: 500; }
+        .row-star { color: #ffcc00; font-size: 14px; margin-left: 8px; display: none; }
+        .commander-row.is-starred .row-star { display: inline; }
+        .chevron { color: var(--text-dim); font-size: 18px; }
+
+        /* --- CAROUSEL SLIDER ENGINE PANELS --- */
+        #card-screen { z-index: 20; transform: translateY(100%); padding-top: env(safe-area-inset-top); }
+        #card-screen.active { transform: translateY(0); }
+
+        .nav-bar { padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--accent); background: var(--bg); z-index: 30; position: relative; }
+        .back-btn { color: var(--text-main); background: none; border: none; font-size: 17px; font-weight: 500; padding: 0; cursor: pointer; }
+        .star-btn { background: none; border: none; font-size: 22px; color: var(--text-dim); cursor: pointer; padding: 0 5px; }
+        .star-btn.active { color: #ffcc00; }
+
+        .carousel-viewport { position: relative; flex: 1; width: 100%; overflow: hidden; display: flex; flex-direction: column; }
+        
+        .global-card-container-wrapper {
+            width: 100%;
+            height: auto;
+            min-height: 405px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 25px;
+            z-index: 25;
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; 
+            will-change: transform;
+        }
+
+        .slider-track { display: flex; width: 300%; height: 100%; position: absolute; left: -100%; top: 0; will-change: transform; z-index: 10; }
+        
+        .card-frame { flex: 0 0 33.33333%; width: 33.33333%; height: 100%; overflow-y: auto; padding: 430px 20px 80px 20px; -webkit-overflow-scrolling: touch; }
+
+        /* --- HARDWARE ACCELERATED PERSISTENT STAGE --- */
+        .card-perspective-stage { 
+            width: 270px; 
+            aspect-ratio: 2.5 / 3.5; 
+            perspective: 1000px; 
+            position: relative; 
+            pointer-events: auto; 
+        }
+        .card-flip-cube { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.4, 1); }
+        .card-flip-cube.flipped { transform: rotateY(180deg); }
+
+        .card-face { 
+            position: absolute; 
+            width: 100%; 
+            height: 100%; 
+            backface-visibility: hidden; 
+            -webkit-backface-visibility: hidden; 
+            transform: translate3d(0, 0, 0);       
+            -webkit-transform: translate3d(0, 0, 0);
+            border-radius: 18px; 
+            box-shadow: 0 12px 32px rgba(0,0,0,0.7); 
+            background: var(--theme-border-bg);
+            padding: 6px; 
+            overflow: hidden;
+        }
+
+        .card-face::before {
+            content: '';
+            position: absolute;
+            top: 6px; left: 6px; right: 6px; bottom: 6px;
+            background: #111;
+            border-radius: 12px;
+            z-index: 1;
+        }
+
+        .card-face-back { 
+            transform: rotateY(180deg) translate3d(0, 0, 0); 
+            -webkit-transform: rotateY(180deg) translate3d(0, 0, 0);
+        }
+
+        .card-image { 
+            position: relative;
+            width: 100%; 
+            height: 100%; 
+            display: block; 
+            border-radius: 12px; 
+            object-fit: contain; 
+            opacity: 1;
+            z-index: 2;
+            transition: opacity 0.1s ease-in-out; 
+        }
+
+        .flip-badge { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); background: var(--theme-color); color: #fff; padding: 5px 14px; border-radius: 14px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.2s, background-color 0.2s; }
+        .flip-badge.show-badge { opacity: 1; pointer-events: auto; }
+
+        /* --- CONTENT DETAIL BREAKDOWNS --- */
+        .card-tags { display: flex; gap: 8px; margin-bottom: 20px; justify-content: center; }
+        .tag { background: var(--accent); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.05); }
+        .tag.tag-rank { background: var(--theme-color); }
+        
+        .card-title { font-size: 30px; font-weight: 800; margin: 0 0 15px 0; line-height: 1.15; text-align: center; letter-spacing: -0.5px; }
+        .section-label { color: var(--theme-color); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px; transition: color 0.2s; }
+        .logic-text { font-size: 17px; line-height: 1.55; color: #f5f5f7; margin-bottom: 25px; }
+        
+        .picks-list { display: grid; gap: 10px; }
+        .pick-card { background: var(--surface); padding: 16px; border-radius: 12px; border: 1px solid var(--accent); font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; }
+        .pick-card.checked { background: rgba(52, 199, 89, 0.15); border-color: #34c759; color: #34c759; }
+        .check-box { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--text-dim); display: flex; align-items: center; justify-content: center; font-size: 11px; color: transparent; }
+        .pick-card.checked .check-box { border-color: #34c759; background: #34c759; color: white; }
+
+        .swipe-hint { text-align: center; color: var(--text-dim); font-size: 11px; margin-top: 30px; opacity: 0.5; padding-bottom: 40px; }
+        ::-webkit-scrollbar { width: 0px; }
+
+        /* --- DATABASE STAR RATINGS & HISTORY UI --- */
+        .rating-section {
+            margin: 20px 0;
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--accent);
+        }
+        .star-rating-container {
+            display: flex;
+            gap: 8px;
+            font-size: 28px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .db-star {
+            color: var(--text-dim);
+            transition: color 0.15s ease;
+        }
+        .db-star.active {
+            color: #ffcc00;
+            text-shadow: 0 0 8px rgba(255, 204, 0, 0.4);
+        }
+        .community-ratings-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+            margin-top: 12px;
+        }
+        .community-list {
+            font-size: 14px;
+            color: #f5f5f7;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .history-toggle-card {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--accent);
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.15s ease;
+        }
+        .history-toggle-card.played {
+            background: rgba(0, 122, 255, 0.15);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .history-toggle-card .check-box {
+            border-radius: 4px;
+        }
+        .history-toggle-card.played .check-box {
+            border-color: var(--primary);
+            background: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    
+<div id="login-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a0a; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px;">
+    <h2 style="margin-bottom:20px; font-weight:800;">Join Cube Codex</h2>
+    <input type="text" id="login-invite" placeholder="Enter Invite Code" style="width:100%; max-width:300px; padding:12px; margin-bottom:10px; border-radius:8px; border:none; background:#2c2c2e; color:white; font-size:16px;">
+    <input type="text" id="login-user" placeholder="Choose Username" style="width:100%; max-width:300px; padding:12px; margin-bottom:20px; border-radius:8px; border:none; background:#2c2c2e; color:white; font-size:16px;">
+    <button onclick="attemptLogin()" style="width:100%; max-width:300px; padding:14px; border-radius:8px; border:none; background:#007aff; color:white; font-weight:700; font-size:16px;">Enter App</button>
+</div>
+    
+<div id="search-screen" class="page">
+    <div class="header">
+        <h1>Cube Codex</h1>
+        <button class="btn-clear-all" onclick="clearAllData()" title="Clear all shortlist selections and favorites">🗑️</button>
+    </div>
+    <div class="filter-tabs">
+        <button id="tab-all" class="tab-btn active" onclick="switchFilterView('all')">All Commanders</button>
+        <button id="tab-shortlist" class="tab-btn" onclick="switchFilterView('shortlist')">Shortlist (0)</button>
+    </div>
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="Fuzzy search names or color identities..." onkeyup="filterData()">
+    </div>
+    <div id="list-container"></div>
+</div>
+
+<div id="card-screen" class="page">
+    <div class="nav-bar">
+        <button class="back-btn" onclick="closeCard()">✕ Close</button>
+        <button id="detail-star-btn" class="star-btn" onclick="toggleStarActive()">★</button>
+    </div>
+    
+    <div class="carousel-viewport" id="carousel-viewport">
+        <div class="global-card-container-wrapper" id="global-card-wrapper">
+            <div class="card-perspective-stage" id="global-perspective-stage">
+                <div class="flip-badge" id="global-flip-badge">🔄 Flip Card</div>
+                <div class="card-flip-cube" id="global-flip-cube">
+                    <div class="card-face" id="global-face-front">
+                        <img class="card-image" id="global-img-front" src="" alt="Front">
+                    </div>
+                    <div class="card-face card-face-back" id="global-face-back">
+                        <img class="card-image" id="global-img-back" src="" alt="Back">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slider-track" id="slider-track">
+            <div class="card-frame" id="left-frame" onscroll="linkScrollContext(this)"></div>
+            <div class="card-frame" id="center-frame" onscroll="linkScrollContext(this)"></div>
+            <div class="card-frame" id="right-frame" onscroll="linkScrollContext(this)"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // DEFINE FUNCTIONS FIRST to prevent ReferenceErrors if external files load slowly
+    const MASTER_INVITE_CODE = "Draft2026"; 
+    let currentUsername = localStorage.getItem('cc_username') || null;
+    let currentActiveRank = 1;
+    let currentFilterView = 'all'; 
+    let starredRankings = JSON.parse(localStorage.getItem('cube_codex_starred')) || [];
+    let checkedSynergies = JSON.parse(localStorage.getItem('cube_codex_synergies')) || {};
+
+    let touchStartX = 0, touchStartY = 0;
+    let initialScrollTop = 0;
+    let isSwiping = false, isScrollingY = false, hasDeterminedDirection = false;
+    let trackWidth = 0;
+
+    // --- COLOR THEME MATRIX ---
+    const colorThemes = {
+        W: '#ffffff', U: '#00bfff', B: '#111111', R: '#ff3b30', G: '#34c759',
+        Azorius: 'linear-gradient(135deg, #ffffff, #00bfff)',
+        Dimir: 'linear-gradient(135deg, #00bfff, #111111)',
+        Rakdos: 'linear-gradient(135deg, #ff3b30, #111111)',
+        Gruul: 'linear-gradient(135deg, #ff3b30, #34c759)',
+        Selesnya: 'linear-gradient(135deg, #34c759, #ffffff)',
+        Orzhov: 'linear-gradient(135deg, #111111, #ffffff)',
+        Izzet: 'linear-gradient(135deg, #00bfff, #ff3b30)',
+        Golgari: 'linear-gradient(135deg, #111111, #34c759)',
+        Boros: 'linear-gradient(135deg, #ff3b30, #ffffff)',
+        Simic: 'linear-gradient(135deg, #00bfff, #34c759)',
+        Mardu: 'linear-gradient(135deg, #ff3b30, #ffffff, #111111)',
+        Esper: 'linear-gradient(135deg, #00bfff, #ffffff, #111111)',
+        Grixis: 'linear-gradient(135deg, #00bfff, #ff3b30, #111111)',
+        Jund: 'linear-gradient(135deg, #ff3b30, #34c759, #111111)',
+        Naya: 'linear-gradient(135deg, #ff3b30, #ffffff, #34c759)',
+        Abzan: 'linear-gradient(135deg, #ffffff, #111111, #34c759)',
+        Jeskai: 'linear-gradient(135deg, #00bfff, #ffffff, #ff3b30)',
+        Sultai: 'linear-gradient(135deg, #00bfff, #111111, #34c759)',
+        Maro: 'linear-gradient(135deg, #ff3b30, #ffffff, #34c759)',
+        Temur: 'linear-gradient(135deg, #34c759, #00bfff, #ff3b30)',
+        Bant: 'linear-gradient(135deg, #34c759, #ffffff, #00bfff)',
+        WUBRG: 'linear-gradient(135deg, #d4af37, #f3e5ab, #d4af37)', 
+        '5-Color': 'linear-gradient(135deg, #d4af37, #f3e5ab, #d4af37)',
+        'Glint-Eye': 'linear-gradient(135deg, #00bfff, #111111, #ff3b30, #34c759)',
+        'Witch-Maw': 'linear-gradient(135deg, #ffffff, #00bfff, #111111, #34c759)',
+        'Ink-Treader': 'linear-gradient(135deg, #ffffff, #ff3b30, #34c759, #00bfff)',
+        'Yore-Tiller': 'linear-gradient(135deg, #ffffff, #00bfff, #111111, #ff3b30)',
+        'Sans-Green': 'linear-gradient(135deg, #ffffff, #00bfff, #111111, #ff3b30)',
+        'Colorless': 'linear-gradient(135deg, #4a4a4a, #8e8e93, #4a4a4a)'
+    };
+
+    function checkLoginState() {
+        const overlay = document.getElementById('login-overlay');
+        if (currentUsername) {
+            overlay.style.display = 'none';
+            if (window.commanderData) {
+                buildSearchRows(window.commanderData);
+            }
+        } else {
+            overlay.style.display = 'flex';
+        }
+    }
+
+    function attemptLogin() {
+        const invite = document.getElementById('login-invite').value.trim();
+        const user = document.getElementById('login-user').value.trim();
+        
+        if (invite !== MASTER_INVITE_CODE) {
+            alert("Invalid invite code!");
+            return;
+        }
+        if (!user) {
+            alert("Please enter a username!");
+            return;
+        }
+        
+        localStorage.setItem('cc_username', user);
+        currentUsername = user;
+        checkLoginState();
+    }
+
+    function getThemeCSS(colorStr) {
+        if (!colorStr) return '#007aff';
+        const normalized = colorStr.trim().toLowerCase();
+        
+        if (normalized === 'mono-white' || normalized === 'w') return colorThemes.W;
+        if (normalized === 'mono-blue' || normalized === 'u') return colorThemes.U;
+        if (normalized === 'mono-black' || normalized === 'b') return colorThemes.B;
+        if (normalized === 'mono-red' || normalized === 'r') return colorThemes.R;
+        if (normalized === 'mono-green' || normalized === 'g') return colorThemes.G;
+        if (normalized === '5-color' || normalized === 'wubrg') return colorThemes.WUBRG;
+        if (colorThemes[colorStr]) return colorThemes[colorStr];
+        
+        const c = normalized;
+        if (c.includes('w') && c.includes('u') && c.length === 2) return colorThemes.Azorius;
+        if (c.includes('u') && c.includes('b') && c.length === 2) return colorThemes.Dimir;
+        if (c.includes('b') && c.includes('r') && c.length === 2) return colorThemes.Rakdos;
+        if (c.includes('r') && c.includes('g') && c.length === 2) return colorThemes.Gruul;
+        if (c.includes('g') && c.includes('w') && c.length === 2) return colorThemes.Selesnya;
+        if (c.includes('w') && c.includes('b') && c.length === 2) return colorThemes.Orzhov;
+        if (c.includes('u') && c.includes('r') && c.length === 2) return colorThemes.Izzet;
+        if (c.includes('b') && c.includes('g') && c.length === 2) return colorThemes.Golgari;
+        if (c.includes('r') && c.includes('w') && c.length === 2) return colorThemes.Boros;
+        if (c.includes('g') && c.includes('u') && c.length === 2) return colorThemes.Simic;
+        
+        return '#ff3b30'; 
+    }
+
+    function buildSearchRows(data) {
+        const container = document.getElementById('list-container');
+        document.getElementById('tab-shortlist').innerText = `Shortlist (${starredRankings.length})`;
+        
+        let visibleData = data;
+        if (currentFilterView === 'shortlist') {
+            visibleData = data.filter(item => starredRankings.includes(item.rank));
+        }
+
+        if (visibleData.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-dim);">No items found.</div>`;
+            return;
+        }
+
+        container.innerHTML = visibleData.map(c => `
+            <div class="commander-row ${starredRankings.includes(c.rank) ? 'is-starred' : ''}" onclick="openCard(${c.rank})">
+                <div class="row-info">
+                    <span class="row-rank">${c.rank}</span>
+                    <span class="row-name">${c.name}</span>
+                    <span class="row-star">★</span>
+                </div>
+                <span class="chevron">›</span>
+            </div>
+        `).join('');
+    }
+
+    function switchFilterView(viewType) {
+        currentFilterView = viewType;
+        document.getElementById('tab-all').classList.toggle('active', viewType === 'all');
+        document.getElementById('tab-shortlist').classList.toggle('active', viewType === 'shortlist');
+        filterData();
+    }
+
+    function cleanString(str) {
+        return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function filterData() {
+        if (!window.commanderData) return;
+        const rawQuery = document.getElementById('search-input').value;
+        const q = cleanString(rawQuery);
+        const filtered = window.commanderData.filter(c => 
+            cleanString(c.name).includes(q) || 
+            c.colors.toLowerCase().includes(rawQuery.toLowerCase())
+        );
+        buildSearchRows(filtered);
+    }
+
+    function getWorkingDataset() {
+        if (!window.commanderData) return [];
+        if (currentFilterView === 'shortlist') {
+            return window.commanderData.filter(item => starredRankings.includes(item.rank));
+        }
+        return window.commanderData;
+    }
+
+    function openCard(rank) {
+        currentActiveRank = rank;
+        trackWidth = window.innerWidth;
+        document.getElementById('global-flip-cube').classList.remove('flipped');
+        document.getElementById('global-card-wrapper').style.transform = `translate3d(0, 0, 0)`;
+        buildCarouselTrack();
+        document.getElementById('card-screen').classList.add('active');
+    }
+
+    function linkScrollContext(element) {
+        if (element.id === 'center-frame') {
+            const scrollTopOffset = element.scrollTop;
+            document.getElementById('global-card-wrapper').style.transform = `translate3d(0, -${scrollTopOffset}px, 0)`;
+        }
+    }
+
+    function buildCarouselTrack() {
+        const dataset = getWorkingDataset();
+        const activeIndex = dataset.findIndex(item => item.rank === currentActiveRank);
+
+        if (activeIndex === -1) return;
+
+        const currentItem = dataset[activeIndex];
+        const imgFront = document.getElementById('global-img-front');
+        const imgBack = document.getElementById('global-img-back');
+        const flipBadge = document.getElementById('global-flip-badge');
+        const currentThemeBg = getThemeCSS(currentItem.colors);
+
+        imgFront.style.opacity = '0';
+        imgBack.style.opacity = '0';
+
+        document.documentElement.style.setProperty('--theme-border-bg', currentThemeBg);
+
+        imgFront.src = `img/${currentItem.name}.jpg`;
+        imgFront.onload = () => { imgFront.style.opacity = '1'; };
+
+        if (currentItem.back) {
+            imgBack.src = `img/${currentItem.name}b.jpg`;
+            imgBack.onload = () => { imgBack.style.opacity = '1'; };
+            flipBadge.classList.add('show-badge');
+        } else {
+            imgBack.src = '';
+            flipBadge.classList.remove('show-badge');
+        }
+
+        renderFrameTextOnly('center-frame', currentItem);
+        renderFrameTextOnly('left-frame', activeIndex > 0 ? dataset[activeIndex - 1] : null);
+        renderFrameTextOnly('right-frame', activeIndex < dataset.length - 1 ? dataset[activeIndex + 1] : null);
+
+        document.getElementById('global-card-wrapper').style.transform = `translate3d(0, 0, 0)`;
+
+        const isStarred = starredRankings.includes(currentActiveRank);
+        document.getElementById('detail-star-btn').classList.toggle('active', isStarred);
+        
+        const activeTheme = getThemeCSS(currentItem.colors);
+        const fallbackAccent = activeTheme.includes('linear-gradient') ? '#d4af37' : activeTheme;
+        document.documentElement.style.setProperty('--theme-color', fallbackAccent);
+        
+        const track = document.getElementById('slider-track');
+        track.style.transition = 'none';
+        track.style.transform = `translateX(0px)`;
+        
+        preloadAdjacentAssets(dataset, activeIndex);
+        fetchLiveCardData(currentItem.rank, 'center-frame');
+    }
+
+    function renderFrameTextOnly(frameId, item) {
+        const frame = document.getElementById(frameId);
+        if (!item) { frame.innerHTML = ''; return; }
+
+        frame.scrollTop = 0;
+        
+        frame.innerHTML = `
+            <div class="card-tags">
+                <span class="tag tag-rank">Rank #${item.rank}</span>
+                <span class="tag">${item.colors}</span>
+            </div>
+            <h2 class="card-title">${item.name}</h2>
+            
+            <div class="history-toggle-card" id="${frameId}-history-card" onclick="togglePlayedHistory(${item.rank}, '${frameId}')">
+                <span>Mark as Played (Private Log)</span>
+                <div class="check-box">✓</div>
+            </div>
+
+            <div class="rating-section">
+                <div class="section-label" style="margin-bottom:0;">Your Rating (Shared)</div>
+                <div class="star-rating-container" id="${frameId}-stars-target">
+                    <span class="db-star" onclick="submitRating(${item.rank}, 1, '${frameId}')">★</span>
+                    <span class="db-star" onclick="submitRating(${item.rank}, 2, '${frameId}')">★</span>
+                    <span class="db-star" onclick="submitRating(${item.rank}, 3, '${frameId}')">★</span>
+                    <span class="db-star" onclick="submitRating(${item.rank}, 4, '${frameId}')">★</span>
+                    <span class="db-star" onclick="submitRating(${item.rank}, 5, '${frameId}')">★</span>
+                </div>
+                <div class="community-ratings-title">Group Feedback Breakdown</div>
+                <div class="community-list" id="${frameId}-community-target">Loading ratings...</div>
+            </div>
+
+            <div class="section-label">Core Strategy</div>
+            <div class="logic-text">${item.logic}</div>
+            
+            <div class="section-label">Must-Draft Synergy</div>
+            <div class="picks-list" id="${frameId}-picks-target"></div>
+            <div class="swipe-hint">← Swipe horizontally to cycle matrix →</div>
+        `;
+
+        const targetList = document.getElementById(`${frameId}-picks-target`);
+        
+        item.picks.forEach(p => {
+            const uniqueKey = `${item.rank}_${p}`;
+            const isChecked = checkedSynergies[uniqueKey] ? 'checked' : '';
+            
+            const cardNode = document.createElement('div');
+            cardNode.className = `pick-card ${isChecked}`;
+            cardNode.innerHTML = `<span></span><div class="check-box">✓</div>`;
+            cardNode.querySelector('span').textContent = p;
+            
+            cardNode.onclick = function() {
+                toggleSynergyCheck(this, item.rank, p);
+            };
+            
+            targetList.appendChild(cardNode);
+        });
+    }
+
+    async function fetchLiveCardData(rank, frameId) {
+        if (!window.supabaseClient || !currentUsername) return;
+
+        const { data: historyData } = await window.supabaseClient
+            .from('history')
+            .select('*')
+            .eq('commander_rank', rank)
+            .eq('username', currentUsername)
+            .maybeSingle();
+
+        const historyCard = document.getElementById(`${frameId}-history-card`);
+        if (historyCard) {
+            if (historyData) {
+                historyCard.classList.add('played');
+                historyCard.querySelector('span').innerText = "Played in the Past ✓";
+            } else {
+                historyCard.classList.remove('played');
+                historyCard.querySelector('span').innerText = "Mark as Played (Private Log)";
+            }
+        }
+
+        const { data: ratingsData } = await window.supabaseClient
+            .from('ratings')
+            .select('username, stars')
+            .eq('commander_rank', rank);
+
+        if (ratingsData) {
+            const userRating = ratingsData.find(r => r.username === currentUsername);
+            if (userRating) {
+                highlightStarsUI(frameId, userRating.stars);
+            } else {
+                highlightStarsUI(frameId, 0);
+            }
+
+            const communityTarget = document.getElementById(`${frameId}-community-target`);
+            if (communityTarget) {
+                if (ratingsData.length === 0) {
+                    communityTarget.innerHTML = `<span style="color:var(--text-dim); font-style:italic;">No ratings yet. Be the first!</span>`;
+                } else {
+                    communityTarget.innerHTML = ratingsData.map(r => {
+                        const starsDisplay = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
+                        const formattedUser = r.username.charAt(0).toUpperCase() + r.username.slice(1);
+                        return `<div style="margin-bottom:2px;"><strong>${formattedUser}:</strong> <span style="color:#ffcc00;">${starsDisplay}</span></div>`;
+                    }).join('');
+                }
+            }
+        }
+    }
+
+    function highlightStarsUI(frameId, ratingValue) {
+        const starContainer = document.getElementById(`${frameId}-stars-target`);
+        if (!starContainer) return;
+        const stars = starContainer.querySelectorAll('.db-star');
+        stars.forEach((star, index) => {
+            if (index < ratingValue) {
+                star.classList.add('active');
+            } else {
+                star.classList.remove('active');
+            }
+        });
+    }
+
+    async function submitRating(rank, starCount, frameId) {
+        if (!window.supabaseClient) return;
+        highlightStarsUI(frameId, starCount);
+
+        const { error } = await window.supabaseClient
+            .from('ratings')
+            .upsert({
+                commander_rank: rank,
+                username: currentUsername,
+                stars: starCount,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'commander_rank,username' });
+
+        if (error) {
+            console.error("Error saving score submission:", error);
+        } else {
+            fetchLiveCardData(rank, frameId);
+        }
+    }
+
+    async function togglePlayedHistory(rank, frameId) {
+        if (!window.supabaseClient) return;
+        const historyCard = document.getElementById(`${frameId}-history-card`);
+        const isCurrentlyPlayed = historyCard.classList.contains('played');
+
+        if (!isCurrentlyPlayed) {
+            const { error } = await window.supabaseClient
+                .from('history')
+                .insert({
+                    commander_rank: rank,
+                    username: currentUsername
+                });
+            if (error) console.error("Error adding history:", error);
+        } else {
+            const { error } = await window.supabaseClient
+                .from('history')
+                .delete()
+                .eq('commander_rank', rank)
+                .eq('username', currentUsername);
+            if (error) console.error("Error removing history:", error);
+        }
+
+        fetchLiveCardData(rank, frameId);
+    }
+
+    function toggleCardFlip() {
+        const cube = document.getElementById('global-flip-cube');
+        const activeDataset = getWorkingDataset();
+        const activeIndex = activeDataset.findIndex(item => item.rank === currentActiveRank);
+        
+        if (activeDataset[activeIndex] && activeDataset[activeIndex].back) {
+            cube.classList.toggle('flipped');
+        }
+    }
+
+    function toggleSynergyCheck(element, rank, pickName) {
+        const uniqueKey = `${rank}_${pickName}`;
+        element.classList.toggle('checked');
+        if (element.classList.contains('checked')) {
+            checkedSynergies[uniqueKey] = true;
+        } else {
+            delete checkedSynergies[uniqueKey];
+        }
+        localStorage.setItem('cube_codex_synergies', JSON.stringify(checkedSynergies));
+    }
+
+    function toggleStarActive() {
+        const idx = starredRankings.indexOf(currentActiveRank);
+        if (idx > -1) {
+            starredRankings.splice(idx, 1);
+            document.getElementById('detail-star-btn').classList.remove('active');
+        } else {
+            starredRankings.push(currentActiveRank);
+            document.getElementById('detail-star-btn').classList.add('active');
+        }
+        localStorage.setItem('cube_codex_starred', JSON.stringify(starredRankings));
+        filterData();
+    }
+
+    function closeCard() {
+        document.getElementById('card-screen').classList.remove('active');
+    }
+
+    function clearAllData() {
+        const confirmWipe = confirm("Are you sure you want to clear all shortlist selections and checked favorites? This cannot be undone.");
+        if (confirmWipe) {
+            localStorage.removeItem('cube_codex_starred');
+            localStorage.removeItem('cube_codex_synergies');
+            starredRankings = [];
+            checkedSynergies = {};
+            document.getElementById('tab-shortlist').innerText = `Shortlist (0)`;
+            filterData();
+        }
+    }
+
+    function preloadAdjacentAssets(dataset, activeIndex) {
+        const indicesToLoad = [activeIndex + 1, activeIndex + 2, activeIndex - 1];
+        indicesToLoad.forEach(i => {
+            if (i >= 0 && i < dataset.length) {
+                const target = dataset[i];
+                const img = new Image();
+                img.src = `img/${target.name}.jpg`;
+                if (target.back) {
+                    const imgBack = new Image();
+                    imgBack.src = `img/${target.name}b.jpg`;
+                }
+            }
+        });
+    }
+
+    // --- DOM INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+        checkLoginState();
+
+        const artStage = document.getElementById('global-perspective-stage');
+        let artTouchMoved = false;
+
+        artStage.addEventListener('touchstart', e => {
+            if (e.touches.length > 1) return;
+            artTouchMoved = false;
+            
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            
+            const centerFrame = document.getElementById('center-frame');
+            initialScrollTop = centerFrame ? centerFrame.scrollTop : 0;
+            
+            isSwiping = false;
+            isScrollingY = false;
+            hasDeterminedDirection = false;
+            trackWidth = window.innerWidth;
+            
+            document.getElementById('slider-track').style.transition = 'none';
+        }, { passive: true });
+
+        artStage.addEventListener('touchmove', e => {
+            artTouchMoved = true;
+            let currentX = e.touches[0].clientX;
+            let currentY = e.touches[0].clientY;
+            
+            let deltaX = currentX - touchStartX;
+            let deltaY = currentY - touchStartY;
+
+            if (!hasDeterminedDirection) {
+                const moveThreshold = 7;
+                if (Math.abs(deltaX) > moveThreshold || Math.abs(deltaY) > moveThreshold) {
+                    hasDeterminedDirection = true;
+                    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                        isScrollingY = true;
+                    } else {
+                        isSwiping = true;
+                    }
+                }
+            }
+
+            const centerFrame = document.getElementById('center-frame');
+
+            if (isScrollingY && centerFrame) {
+                centerFrame.scrollTop = initialScrollTop - deltaY;
+            }
+
+            if (isSwiping) {
+                const dataset = getWorkingDataset();
+                const activeIndex = dataset.findIndex(item => item.rank === currentActiveRank);
+                if (activeIndex === -1) return;
+
+                if ((activeIndex === 0 && deltaX > 0) || (activeIndex === dataset.length - 1 && deltaX < 0)) {
+                    deltaX /= 3;
+                }
+                document.getElementById('slider-track').style.transform = `translateX(${deltaX}px)`;
+                document.getElementById('global-card-wrapper').style.transform = `translate3d(${deltaX}px, -${centerFrame.scrollTop}px, 0)`;
+            }
+        });
+
+        artStage.addEventListener('touchend', e => {
+            if (!artTouchMoved) {
+                toggleCardFlip();
+                return;
+            }
+
+            if (!isSwiping) return;
+            isSwiping = false;
+
+            const deltaX = e.changedTouches[0].clientX - touchStartX;
+            const swipeThreshold = trackWidth * 0.22; 
+            const dataset = getWorkingDataset();
+            const activeIndex = dataset.findIndex(item => item.rank === currentActiveRank);
+            if (activeIndex === -1) return;
+            const centerFrame = document.getElementById('center-frame');
+
+            const track = document.getElementById('slider-track');
+            const wrapper = document.getElementById('global-card-wrapper');
+
+            track.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+
+            if (deltaX < -swipeThreshold && activeIndex < dataset.length - 1) {
+                track.style.transform = `translateX(-${trackWidth}px)`;
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(-${trackWidth}px, 0px, 0)`;
+                
+                setTimeout(() => {
+                    currentActiveRank = dataset[activeIndex + 1].rank;
+                    wrapper.style.transition = 'none';
+                    document.getElementById('global-flip-cube').classList.remove('flipped');
+                    buildCarouselTrack();
+                }, 250);
+            } else if (deltaX > swipeThreshold && activeIndex > 0) {
+                track.style.transform = `translateX(${trackWidth}px)`;
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(${trackWidth}px, 0px, 0)`;
+                
+                setTimeout(() => {
+                    currentActiveRank = dataset[activeIndex - 1].rank;
+                    wrapper.style.transition = 'none';
+                    document.getElementById('global-flip-cube').classList.remove('flipped');
+                    buildCarouselTrack();
+                }, 250);
+            } else {
+                track.style.transform = 'translateX(0px)';
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(0px, -${centerFrame.scrollTop}px, 0)`;
+                setTimeout(() => { wrapper.style.transition = 'none'; }, 250);
+            }
+        });
+
+        const cardScreen = document.getElementById('card-screen');
+        cardScreen.addEventListener('touchstart', e => {
+            if (e.target.closest('#global-perspective-stage') || e.touches.length > 1) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            isSwiping = false;
+            isScrollingY = false;
+            hasDeterminedDirection = false;
+            trackWidth = window.innerWidth;
+            document.getElementById('slider-track').style.transition = 'none';
+        }, { passive: true });
+
+        cardScreen.addEventListener('touchmove', e => {
+            if (e.target.closest('#global-perspective-stage') || isScrollingY) return;
+
+            let currentX = e.touches[0].clientX;
+            let currentY = e.touches[0].clientY;
+            let deltaX = currentX - touchStartX;
+            let deltaY = currentY - touchStartY;
+
+            if (!hasDeterminedDirection) {
+                const moveThreshold = 7;
+                if (Math.abs(deltaX) > moveThreshold || Math.abs(deltaY) > moveThreshold) {
+                    hasDeterminedDirection = true;
+                    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                        isScrollingY = true;
+                        return;
+                    } else {
+                        isSwiping = true;
+                    }
+                } else {
+                    return;
+                }
+            }
+
+            if (isSwiping) {
+                const dataset = getWorkingDataset();
+                const activeIndex = dataset.findIndex(item => item.rank === currentActiveRank);
+                if (activeIndex === -1) return;
+
+                if ((activeIndex === 0 && deltaX > 0) || (activeIndex === dataset.length - 1 && deltaX < 0)) {
+                    deltaX /= 3;
+                }
+                document.getElementById('slider-track').style.transform = `translateX(${deltaX}px)`;
+                document.getElementById('global-card-wrapper').style.transform = `translate3d(${deltaX}px, -${document.getElementById('center-frame').scrollTop}px, 0)`;
+            }
+        });
+
+        cardScreen.addEventListener('touchend', e => {
+            if (e.target.closest('#global-perspective-stage') || !isSwiping) return;
+            isSwiping = false;
+
+            const deltaX = e.changedTouches[0].clientX - touchStartX;
+            const swipeThreshold = trackWidth * 0.22; 
+            const dataset = getWorkingDataset();
+            const activeIndex = dataset.findIndex(item => item.rank === currentActiveRank);
+            if (activeIndex === -1) return;
+
+            const track = document.getElementById('slider-track');
+            const wrapper = document.getElementById('global-card-wrapper');
+
+            track.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+
+            if (deltaX < -swipeThreshold && activeIndex < dataset.length - 1) {
+                track.style.transform = `translateX(-${trackWidth}px)`;
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(-${trackWidth}px, 0px, 0)`;
+                
+                setTimeout(() => {
+                    currentActiveRank = dataset[activeIndex + 1].rank;
+                    wrapper.style.transition = 'none';
+                    document.getElementById('global-flip-cube').classList.remove('flipped');
+                    buildCarouselTrack();
+                }, 250);
+            } else if (deltaX > swipeThreshold && activeIndex > 0) {
+                track.style.transform = `translateX(${trackWidth}px)`;
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(${trackWidth}px, 0px, 0)`;
+                
+                setTimeout(() => {
+                    currentActiveRank = dataset[activeIndex - 1].rank;
+                    wrapper.style.transition = 'none';
+                    document.getElementById('global-flip-cube').classList.remove('flipped');
+                    buildCarouselTrack();
+                }, 250);
+            } else {
+                track.style.transform = 'translateX(0px)';
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.1, 0.8, 0.3, 1)';
+                wrapper.style.transform = `translate3d(0px, -${document.getElementById('center-frame').scrollTop}px, 0)`;
+                setTimeout(() => { wrapper.style.transition = 'none'; }, 250);
+            }
+        });
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="data.js"></script>
+<script>
+    // Initialize Supabase after the DOM is ready and scripts have loaded
+    window.addEventListener('load', () => {
+        const SUPABASE_URL = "https://neuyshuzdguofexrjccl.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_H802q8wT8TAxsUJJanW-KQ_faxgZG9H";
+        if (window.supabase) {
+            window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            // Re-render to fetch data if the user is already logged in
+            if (currentUsername && currentActiveRank) {
+                fetchLiveCardData(currentActiveRank, 'center-frame');
+            }
+        } else {
+            console.error("Supabase CDN failed to load.");
+        }
+        
+        // Re-render list now that data is loaded
+        if (currentUsername && window.commanderData) {
+            buildSearchRows(window.commanderData);
+        }
+    });
+</script>
+</body>
+</html>
